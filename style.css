@@ -45,3 +45,10 @@ button:disabled { cursor:wait; opacity:.65; transform:none; }
 .t-help { color:var(--t-help); font-size:14px; } .t-kicker { color:var(--t-kicker); font-weight:700; font-size:16px; letter-spacing:.12rem; }
 .t-intro { color:var(--t-intro); font-size:17px; line-height:1.5; } .t-note { color:var(--t-note); font-size:14px; }
 @media(max-width:640px){ .form-shell{padding:1rem}.menu-option{min-height:170px} }
+.dictate-btn { display:inline-flex; align-items:center; gap:.4rem; flex:0 0 auto; border-radius:999px; padding:.35rem .85rem; font-size:14px; font-weight:600; border:1px solid var(--edge); background:rgba(255,255,255,.12); color:var(--t-label); }
+.year6-theme .dictate-btn { background:rgba(255,255,255,.6); }
+.dictate-btn svg { width:16px; height:16px; }
+.dictate-btn.is-listening { background:#e5484d; border-color:#e5484d; color:#fff; animation:dictate-pulse 1.2s ease-in-out infinite; }
+.dictate-btn:disabled { opacity:.5; cursor:not-allowed; }
+.dictation-feedback { display:block; min-height:1.25rem; margin-top:.4rem; }
+@keyframes dictate-pulse { 50% { box-shadow:0 0 0 6px rgba(229,72,77,.25); } }
