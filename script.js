@@ -1,6 +1,6 @@
 /* ============ SETTINGS ============ */
 // Where submissions are sent (see README). Google Apps Script web-app URL or Formspree URL.
-const FORM_ENDPOINT = "https://script.google.com/a/macros/bilfen.k12.tr/s/AKfycbzKEQbSzyF6JhVC5wB9_YBgNrzyGk-kotIBYZPeuSjby4VM6-3uCcefnhH88jwIL6WL/exec";
+const FORM_ENDPOINT = "https://formspree.io/f/xbglqzql";
 
 const YEARS = {
   year6: {
@@ -144,7 +144,8 @@ function setupForm(y) {
     };
     try {
       // text/plain + no-cors avoids preflight problems with Google Apps Script
-      await fetch(FORM_ENDPOINT, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(record) });
+      const res = await fetch(FORM_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(record) });
+if (!res.ok) throw new Error("save");
       form.reset(); slider.value = "3"; clarity(); gate();
       say("Thank you — your feedback has been saved successfully.", true);
     } catch (err) { say("We could not confirm your submission. Please refresh before trying again."); }
