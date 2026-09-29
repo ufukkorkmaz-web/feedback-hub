@@ -1,6 +1,6 @@
 /* ============ SETTINGS ============ */
 // Where submissions are sent (see README). Google Apps Script web-app URL or Formspree URL.
-const FORM_ENDPOINT = "https://script.google.com/a/macros/bilfen.k12.tr/s/AKfycbwXWlfQvdS5aq78DQ9uTNUPOuykEBxyVyOyTHJc5iybVH7e4hGRI_i-ZOGwhOHxkwjt/exec";
+const FORM_ENDPOINT = "https://script.google.com/a/macros/bilfen.k12.tr/s/AKfycbzKEQbSzyF6JhVC5wB9_YBgNrzyGk-kotIBYZPeuSjby4VM6-3uCcefnhH88jwIL6WL/exec";
 
 const YEARS = {
   year6: {
