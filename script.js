@@ -46,8 +46,12 @@ const card = (y, id, icon, title, help, q) => `
   <section class="question-section reflection-card glass-panel rounded-[24px] p-5 sm:p-7">
     <div class="mb-5 flex gap-4"><div class="icon-bubble"><i data-lucide="${icon}"></i></div>
       <div><h2 class="t-title" style="font-size:24px;">${title}</h2><p class="t-help mt-1">${help}</p></div></div>
-    <label for="${y}-${id}" class="t-label mb-2 block text-sm">${q}</label>
+        <div class="mb-2 flex items-start justify-between gap-3">
+      <label for="${y}-${id}" class="t-label block text-sm">${q}</label>
+      <button type="button" class="dictate-btn" data-dictate-for="${y}-${id}" aria-label="Start dictation" aria-pressed="false"><i data-lucide="mic" aria-hidden="true"></i><span>Speak</span></button>
+    </div>
     <textarea id="${y}-${id}" class="field" required></textarea>
+    <span class="dictation-feedback t-help" role="status" aria-live="polite"></span>
   </section>`;
 
 const select = (y, id, label) => `
@@ -152,9 +156,70 @@ if (!res.ok) throw new Error("save");
     finally { button.disabled = false; }
   });
 }
+function setupDictation() {
+  const buttons = document.querySelectorAll("[data-dictate-for]");
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    buttons.forEach(b => { b.disabled = true; b.querySelector("span").textContent = "Unavailable"; });
+    return;
+  }
+  let activeButton = null, activeTextarea = null, recognition = null;
 
+  function resetButton() {
+    if (!activeButton) return;
+    activeButton.classList.remove("is-listening");
+    activeButton.setAttribute("aria-pressed", "false");
+    activeButton.setAttribute("aria-label", activeButton.dataset.defaultLabel);
+    activeButton.querySelector("span").textContent = "Speak";
+    activeButton = activeTextarea = recognition = null;
+  }
+  function stopDictation() { recognition ? recognition.stop() : resetButton(); }
+
+  buttons.forEach(button => {
+    button.dataset.defaultLabel = button.getAttribute("aria-label");
+    button.addEventListener("click", () => {
+      if (activeButton === button) return stopDictation();
+      if (activeButton) stopDictation();
+
+      const textarea = document.getElementById(button.dataset.dictateFor);
+      const feedback = textarea.parentElement.querySelector(".dictation-feedback");
+      const baseText = textarea.value.trim();
+
+      recognition = new Recognition();
+      recognition.lang = "en-US";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      activeButton = button; activeTextarea = textarea;
+
+      button.classList.add("is-listening");
+      button.setAttribute("aria-pressed", "true");
+      button.setAttribute("aria-label", "Stop dictation");
+      button.querySelector("span").textContent = "Stop";
+      feedback.textContent = "Listening… speak naturally, then press Stop.";
+      textarea.focus();
+
+      recognition.onresult = event => {
+        const transcript = Array.from(event.results).map(r => r[0].transcript).join(" ").trim();
+        textarea.value = [baseText, transcript].filter(Boolean).join(" ");
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        feedback.textContent = "Listening…";
+      };
+      recognition.onerror = event => {
+        if (event.error !== "aborted" && activeTextarea === textarea) {
+          feedback.textContent = (event.error === "not-allowed" || event.error === "service-not-allowed")
+            ? "Microphone access was blocked." : "Voice input is unavailable.";
+        }
+      };
+      recognition.onend = () => {
+        if (activeTextarea === textarea) { if (feedback.textContent.startsWith("Listening")) feedback.textContent = ""; resetButton(); }
+      };
+      try { recognition.start(); } catch (err) { resetButton(); }
+    });
+  });
+}
 document.addEventListener("DOMContentLoaded", () => {
   Object.entries(YEARS).forEach(([y, c]) => { renderYear(y, c); setupForm(y); });
+  setupDictation();
   const glow = document.getElementById("cursor-glow"); let frame = 0;
   document.addEventListener("pointermove", e => {
     if (e.pointerType === "touch") return;
