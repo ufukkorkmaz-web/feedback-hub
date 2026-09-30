@@ -163,6 +163,86 @@ function setupDictation() {
     buttons.forEach(b => { b.disabled = true; b.querySelector("span").textContent = "Unavailable"; });
     return;
   }
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  let activeButton = null, activeTextarea = null, recognition = null, wantListening = false;
+
+  function resetButton() {
+    if (!activeButton) return;
+    activeButton.classList.remove("is-listening");
+    activeButton.setAttribute("aria-pressed", "false");
+    activeButton.setAttribute("aria-label", activeButton.dataset.defaultLabel);
+    activeButton.querySelector("span").textContent = "Speak";
+    activeButton = activeTextarea = recognition = null;
+    wantListening = false;
+  }
+  function stopDictation() {
+    wantListening = false;
+    recognition ? recognition.stop() : resetButton();
+  }
+
+  buttons.forEach(button => {
+    button.dataset.defaultLabel = button.getAttribute("aria-label");
+    button.addEventListener("click", () => {
+      if (activeButton === button) return stopDictation();
+      if (activeButton) stopDictation();
+
+      const textarea = document.getElementById(button.dataset.dictateFor);
+      const feedback = textarea.parentElement.querySelector(".dictation-feedback");
+      let committed = textarea.value.trim();
+      const write = extra => {
+        textarea.value = [committed, extra].filter(Boolean).join(" ");
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+
+      activeButton = button; activeTextarea = textarea; wantListening = true;
+      button.classList.add("is-listening");
+      button.setAttribute("aria-pressed", "true");
+      button.setAttribute("aria-label", "Stop dictation");
+      button.querySelector("span").textContent = "Stop";
+      feedback.textContent = "Listening… speak naturally, then press Stop.";
+      textarea.focus();
+
+      const begin = () => {
+        const rec = new Recognition();
+        recognition = rec;
+        rec.lang = "en-US";
+        rec.continuous = !isMobile;       // phones: one phrase at a time
+        rec.interimResults = !isMobile;   // phones: finished text only
+
+        rec.onresult = event => {
+          if (isMobile) {
+            let chunk = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              if (event.results[i].isFinal) chunk += event.results[i][0].transcript + " ";
+            }
+            chunk = chunk.trim();
+            if (chunk) { committed = [committed, chunk].filter(Boolean).join(" "); write(""); }
+          } else {
+            write(Array.from(event.results).map(r => r[0].transcript).join(" ").trim());
+          }
+        };
+        rec.onerror = event => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            wantListening = false;
+            feedback.textContent = "Microphone access was blocked.";
+          } else if (event.error !== "aborted" && event.error !== "no-speech") {
+            feedback.textContent = "Voice input is unavailable.";
+          }
+        };
+        rec.onend = () => {
+          if (recognition !== rec) return;
+          if (wantListening && isMobile && activeTextarea === textarea) {
+            try { begin(); return; } catch (err) {}   // keep listening on phones
+          }
+          if (feedback.textContent.startsWith("Listening")) feedback.textContent = "";
+          resetButton();
+        };
+        rec.start();
+      };
+      try { begin(); } catch (err) { resetButton(); }
+    });
+  });
+}
   let activeButton = null, activeTextarea = null, recognition = null;
 
   function resetButton() {
