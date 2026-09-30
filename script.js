@@ -298,17 +298,25 @@ function setupDictation() {
   });
 }
 document.addEventListener("DOMContentLoaded", () => {
-  Object.entries(YEARS).forEach(([y, c]) => { renderYear(y, c); setupForm(y); });
-  setupDictation();
-  const glow = document.getElementById("cursor-glow"); let frame = 0;
-  document.addEventListener("pointermove", e => {
-    if (e.pointerType === "touch") return;
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => { glow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate3d(-50%, -50%, 0)`; glow.classList.add("visible"); });
-  });
-  document.addEventListener("pointerout", e => { if (!e.relatedTarget) glow.classList.remove("visible"); });
+  // Menu first, so it always works
   document.getElementById("open-year6").addEventListener("click", () => showView("year6-view"));
   document.getElementById("open-year7").addEventListener("click", () => showView("year7-view"));
-  ["year6", "year7"].forEach(y => document.getElementById("back-" + y).addEventListener("click", () => showView("menu-view")));
-  lucide.createIcons();
+
+  try {
+    Object.entries(YEARS).forEach(([y, c]) => { renderYear(y, c); setupForm(y); });
+    ["year6", "year7"].forEach(y => document.getElementById("back-" + y).addEventListener("click", () => showView("menu-view")));
+  } catch (err) { console.error("Form setup failed:", err); }
+
+  try { setupDictation(); } catch (err) { console.error("Dictation setup failed:", err); }
+  try { lucide.createIcons(); } catch (err) { console.error("Icons failed:", err); }
+
+  try {
+    const glow = document.getElementById("cursor-glow"); let frame = 0;
+    document.addEventListener("pointermove", e => {
+      if (e.pointerType === "touch") return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => { glow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate3d(-50%, -50%, 0)`; glow.classList.add("visible"); });
+    });
+    document.addEventListener("pointerout", e => { if (!e.relatedTarget) glow.classList.remove("visible"); });
+  } catch (err) { console.error("Glow failed:", err); }
 });
