@@ -46,7 +46,7 @@ const card = (y, id, icon, title, help, q) => `
   <section class="question-section reflection-card glass-panel rounded-[24px] p-5 sm:p-7">
     <div class="mb-5 flex gap-4"><div class="icon-bubble"><i data-lucide="${icon}"></i></div>
       <div><h2 class="t-title" style="font-size:24px;">${title}</h2><p class="t-help mt-1">${help}</p></div></div>
-        <div class="mb-2 flex items-start justify-between gap-3">
+    <div class="mb-2 flex items-start justify-between gap-3">
       <label for="${y}-${id}" class="t-label block text-sm">${q}</label>
       <button type="button" class="dictate-btn" data-dictate-for="${y}-${id}" aria-label="Start dictation" aria-pressed="false"><i data-lucide="mic" aria-hidden="true"></i><span>Speak</span></button>
     </div>
@@ -138,24 +138,25 @@ function setupForm(y) {
   form.addEventListener("submit", async e => {
     e.preventDefault(); status.textContent = "";
     if (!form.checkValidity()) { form.reportValidity(); return say("Please complete every required field before submitting your feedback."); }
-    if (FORM_ENDPOINT.startsWith("PASTE_")) return say("This form isn't connected to a feedback sheet yet. See the README.");
     button.disabled = true;
-    const record = {
-      year_level: YEARS[y].label, email: val("email"), week: val("week"), worked_well: val("worked"),
-      didnt_work: val("challenge"), plan_changes: val("plan"), overall_rating: Number(val("overall")),
-      objectives_clarity: Number(slider.value), resources_effectiveness: Number(val("resources")),
-      student_engagement: Number(val("engagement")), other_notes: val("notes"), submitted_at: new Date().toISOString()
+    const pretty = {
+      _subject: `New ${YEARS[y].label} IPT feedback (Week ${val("week")})`, email: val("email"),
+      "Year level": YEARS[y].label, "Week": val("week"),
+      "What worked well?": val("worked"), "What didn't work?": val("challenge"), "Shape the next plan": val("plan"),
+      "Overall rating of the week (1-5)": val("overall"), "Effectiveness of teaching resources (1-5)": val("resources"),
+      "Student engagement (1-5)": val("engagement"), "Learning objectives clarity (1-5)": slider.value,
+      "One more thought": val("notes")
     };
     try {
-      // text/plain + no-cors avoids preflight problems with Google Apps Script
-      const res = await fetch(FORM_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(record) });
-if (!res.ok) throw new Error("save");
+      const res = await fetch(FORM_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" }, body: JSON.stringify(pretty) });
+      if (!res.ok) throw new Error("save");
       form.reset(); slider.value = "3"; clarity(); gate();
       say("Thank you — your feedback has been saved successfully.", true);
     } catch (err) { say("We could not confirm your submission. Please refresh before trying again."); }
     finally { button.disabled = false; }
   });
 }
+
 function setupDictation() {
   const buttons = document.querySelectorAll("[data-dictate-for]");
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -177,7 +178,7 @@ function setupDictation() {
   }
   function stopDictation() {
     wantListening = false;
-    recognition ? recognition.stop() : resetButton();
+    if (recognition) recognition.stop(); else resetButton();
   }
 
   buttons.forEach(button => {
@@ -206,9 +207,8 @@ function setupDictation() {
         const rec = new Recognition();
         recognition = rec;
         rec.lang = "en-US";
-        rec.continuous = !isMobile;       // phones: one phrase at a time
-        rec.interimResults = !isMobile;   // phones: finished text only
-
+        rec.continuous = !isMobile;
+        rec.interimResults = !isMobile;
         rec.onresult = event => {
           if (isMobile) {
             let chunk = "";
@@ -232,7 +232,7 @@ function setupDictation() {
         rec.onend = () => {
           if (recognition !== rec) return;
           if (wantListening && isMobile && activeTextarea === textarea) {
-            try { begin(); return; } catch (err) {}   // keep listening on phones
+            try { begin(); return; } catch (err) {}
           }
           if (feedback.textContent.startsWith("Listening")) feedback.textContent = "";
           resetButton();
@@ -243,60 +243,7 @@ function setupDictation() {
     });
   });
 }
-  let activeButton = null, activeTextarea = null, recognition = null;
 
-  function resetButton() {
-    if (!activeButton) return;
-    activeButton.classList.remove("is-listening");
-    activeButton.setAttribute("aria-pressed", "false");
-    activeButton.setAttribute("aria-label", activeButton.dataset.defaultLabel);
-    activeButton.querySelector("span").textContent = "Speak";
-    activeButton = activeTextarea = recognition = null;
-  }
-  function stopDictation() { recognition ? recognition.stop() : resetButton(); }
-
-  buttons.forEach(button => {
-    button.dataset.defaultLabel = button.getAttribute("aria-label");
-    button.addEventListener("click", () => {
-      if (activeButton === button) return stopDictation();
-      if (activeButton) stopDictation();
-
-      const textarea = document.getElementById(button.dataset.dictateFor);
-      const feedback = textarea.parentElement.querySelector(".dictation-feedback");
-      const baseText = textarea.value.trim();
-
-      recognition = new Recognition();
-      recognition.lang = "en-US";
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      activeButton = button; activeTextarea = textarea;
-
-      button.classList.add("is-listening");
-      button.setAttribute("aria-pressed", "true");
-      button.setAttribute("aria-label", "Stop dictation");
-      button.querySelector("span").textContent = "Stop";
-      feedback.textContent = "Listening… speak naturally, then press Stop.";
-      textarea.focus();
-
-      recognition.onresult = event => {
-        const transcript = Array.from(event.results).map(r => r[0].transcript).join(" ").trim();
-        textarea.value = [baseText, transcript].filter(Boolean).join(" ");
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
-        feedback.textContent = "Listening…";
-      };
-      recognition.onerror = event => {
-        if (event.error !== "aborted" && activeTextarea === textarea) {
-          feedback.textContent = (event.error === "not-allowed" || event.error === "service-not-allowed")
-            ? "Microphone access was blocked." : "Voice input is unavailable.";
-        }
-      };
-      recognition.onend = () => {
-        if (activeTextarea === textarea) { if (feedback.textContent.startsWith("Listening")) feedback.textContent = ""; resetButton(); }
-      };
-      try { recognition.start(); } catch (err) { resetButton(); }
-    });
-  });
-}
 document.addEventListener("DOMContentLoaded", () => {
   // Menu first, so it always works
   document.getElementById("open-year6").addEventListener("click", () => showView("year6-view"));
