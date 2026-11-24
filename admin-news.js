@@ -7,10 +7,16 @@
 (function () {
   "use strict";
   var NEWS = [
-    { id: "2026-10-24-security", date: "24 Oct 2026", title: "Major Security Update", tag: "Ufuk",
-      text: "A major security update has been made. The website and admin page now back up every 3 days to prevent any data loss. All feedback data is protected in pre-determined categories." },
-    { id: "2026-10-24-autosave", date: "24 Oct 2026", title: "Autosave Flexibility Update", tag: "Ufuk",
-      text: "Autosave keeps the data on the local server for 14 days to prevent any data loss and sends automatically whenever the Internet is back only when 'Submit' button is pressed." },
+    { id: "2026-11-24-hf-window", date: "24 Nov 2026", title: "Hands-free now opens in its own window", tag: "Ufuk",
+      text: "When a teacher starts hands-free, the questions open in a glass window as a row of cards. Saying next question slides to the next card and the spoken answer appears live. The bottom of the screen glows in the site colours and grows with the voice. After submit the window closes and the normal form is back." },
+    { id: "2026-10-30-holidays", date: "30 Oct 2026", title: "Holidays and breaks on the calendar", tag: "Ufuk",
+      text: "The calendar now shows school breaks, official holidays, Bayram days and half days, with the dates in config.js. A Monday that falls on a break has no feedback: the Feedback this week box says so and shows the next feedback Monday, and every school after it moves one Monday later (Year 5, 6 and 7, and the Schools yet to respond list on this page). The monthly report follows too: each report covers 4 feedback Mondays, so a break pauses the cycle and it carries on afterwards." },
+    { id: "2026-10-28-next", date: "28 Oct 2026", title: "Thank-you card shows the next feedback Monday", tag: "Ufuk",
+      text: "After a teacher presses Submit, the thank-you card now also says when their school\u2019s next feedback Monday is, for example \u201CMonday 14 December \u00B7 in 47 days\u201D. It uses the same school rotation as the calendar." },
+    { id: "2026-10-28-scroll", date: "28 Oct 2026", title: "New scroll bar", tag: "Ufuk",
+      text: "Every scrolling area on the site and this admin page has a slim glass scroll bar with a teal-to-blue gradient on a dark track. It works exactly as before, and Firefox shows the same colours without the gradient." },
+    { id: "2026-10-25-monthly", date: "25 Oct 2026", title: "Monthly report (new)", tag: "Ufuk",
+      text: "Every 4 weeks, a window greets each admin with \u201CYour monthly report is ready\u201D. It shows the responses, the overall score, resources, engagement and clarity, how they changed since the previous 4 weeks, and a short overview. The new Monthly report button in the bottom-left corner opens it any time, and the arrows go back to earlier reports. It also has an AI overview with suggested actions that starts by itself (switched on in config.js once approved; open admin.html?aitest=1 to try it on made-up answers). The numbers are worked out automatically and no teacher comments are shown." },
     { id: "2026-10-24-secure", date: "24 Oct 2026", title: "AI Summary is live and locked to this site", tag: "Ufuk",
       text: "AI Summary now runs through our own secure service. It only answers requests that come from this admin page, and only for signed-in admins. Emails and school names are removed before anything is sent, and quotes are checked against the real answers." },
     { id: "2026-10-24-welcome", date: "24 Oct 2026", title: "A personal welcome", tag: "Ufuk",
