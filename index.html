@@ -5,6 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IPT Feedback</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" href="favicon.ico" sizes="any">
   <script>document.documentElement.classList.add("js")</script>
   <script id="preview-clock">
     /* PREVIEW MODE (admin helper): open the site with ?preview=1 to get a panel for testing any date and time.
@@ -156,14 +159,22 @@
       .meet-title,.meet-clock{font-size:19px}
     }
     .fw-card{padding:.8rem 1rem;display:flex;flex-direction:column;gap:.5rem;color:var(--t-label)}
-    .fw-head{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem}
+    .fw-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:.25rem .75rem}
     .fw-title{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#9decE5}
-    .fw-date{font-size:13px;font-weight:600;color:var(--t-help);white-space:nowrap}
+    .fw-date{font-size:17px;font-weight:700;color:var(--t-title);white-space:nowrap}
+    .fw-date{background:linear-gradient(100deg,var(--t-title) 0%,var(--t-title) 38%,#7ef0e2 50%,var(--t-title) 62%,var(--t-title) 100%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:drop-shadow(0 0 6px rgba(82,217,202,.35));animation:fwShine 5s ease-in-out infinite}
+    @keyframes fwShine{0%,50%{background-position:130% 0}100%{background-position:-130% 0}}
+    @media (prefers-reduced-motion:reduce){.fw-date{animation:none;background:none;-webkit-text-fill-color:currentColor;color:var(--t-title);filter:none}}
     .fw-row{display:flex;align-items:center;gap:.75rem}
     .fw-chip{flex:none;min-width:4.25rem;text-align:center;font-size:13px;font-weight:700;padding:.2rem .65rem;border-radius:999px}
     .fw-chip-5{background:linear-gradient(135deg,#e2d0ff,#a183ee);color:#2a0f5e}
     .fw-chip-6{background:linear-gradient(135deg,#fff37b,#67e8f9);color:#073d67}
     .fw-chip-7{background:linear-gradient(135deg,#1e4f96,#3179b9);color:#effcff}
+    .fw-off{display:flex;align-items:center;gap:.7rem;padding:.55rem .75rem;border-radius:14px;background:linear-gradient(135deg,rgba(176,150,255,.2),rgba(155,231,255,.14));border:1px solid rgba(225,244,255,.28)}
+    .fw-off-ico{font-size:24px;line-height:1}
+    .fw-off b{display:block;font-size:15px;color:var(--t-title)}
+    .fw-off span span{display:block;font-size:13.5px;font-weight:600;color:var(--t-help);line-height:1.35}
+    .fw-next{font-size:13.5px;color:var(--t-help)}.fw-next b{color:var(--t-title)}
     .fw-schools{font-size:14px;font-weight:600;line-height:1.35;color:var(--t-title)}
     .meet-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .meet-row.is-next,.meet-row.is-live{border-color:rgba(121,235,221,.6);background:rgba(121,235,221,.12)}
@@ -252,7 +263,13 @@
     .thanks-check{stroke-dasharray:1;stroke-dashoffset:1}
     .thanks-overlay.show .thanks-check{animation:thanksCheck .5s ease .25s forwards}
     @keyframes thanksCheck{to{stroke-dashoffset:0}}
-    @media(prefers-reduced-motion:reduce){.thanks-overlay,.thanks-card{transition:none}.thanks-card{transform:none}.thanks-check{animation:none!important;stroke-dashoffset:0}}
+    .thanks-next{display:flex;align-items:center;gap:.7rem;width:fit-content;max-width:100%;margin:1.1rem auto 0;padding:.65rem 1rem;border-radius:18px;text-align:left;color:#eaf6ff;background:linear-gradient(135deg,rgba(255,155,210,.14),rgba(155,231,255,.16),rgba(184,255,207,.12));border:1px solid rgba(225,244,255,.32);box-shadow:inset 0 1px 0 rgba(255,255,255,.22);opacity:0;transform:translateY(8px)}
+    .thanks-overlay.show .thanks-next{animation:thanksNext .55s cubic-bezier(.2,.8,.2,1) .75s forwards}
+    .thanks-next svg{flex:none;width:26px;height:26px;color:#9be7ff}
+    .thanks-next b{display:block;font-size:13px;font-weight:700;letter-spacing:.02em;color:#c9f3ff}
+    .thanks-next span span{display:block;font-size:15px;font-weight:600;line-height:1.35}
+    @keyframes thanksNext{to{opacity:1;transform:none}}
+    @media(prefers-reduced-motion:reduce){.thanks-overlay,.thanks-card{transition:none}.thanks-card{transform:none}.thanks-check{animation:none!important;stroke-dashoffset:0}.thanks-next{animation:none!important;opacity:1;transform:none}}
   </style>
 </head>
 <body style="background: linear-gradient(90deg, rgb(0,0,0), rgb(53,51,205));">
@@ -355,6 +372,7 @@
   <script src="selector-glow.js"></script>
   <script src="before-start.js"></script>
   <script src="hf-cheat.js"></script>
+  <script src="hf-window.js"></script>
   <script id="meeting-status">
     /* Live "next meeting" line for the meetings box. Times come from the data-* attributes on the rows above. */
     (function () {
