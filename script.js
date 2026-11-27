@@ -59,7 +59,7 @@ const SCHOOLS_BY_YEAR = (() => {
 
 const YEARS = {
   year5: {
-    label: "Year 5", logo: "assets/logo-year5.png", logoAlt: "Year 5 IPT school badge logo", kicker: "YEAR 5 IPT",
+    label: "Year 5", logo: "assets/logo-menu.png", logoAlt: "Year 5 IPT school badge logo", kicker: "YEAR 5 IPT",
     title: "Teaching feedback, gently collected.",
     intro: "Dear colleagues, please complete this form after teaching Year 5 IPT. Your reflections, ideas, and suggestions help us improve together.",
     emailHelp: "Your designated school email will be included with this Year 5 response. Please enter your email to proceed.",
@@ -415,7 +415,7 @@ function setupForm(y) {
       draftOff = true; clearTimeout(draftTimer);
       form.reset(); slider.value = "3"; clarity(); gate(); showWarn(); draftClear(); draftOff = false;
       say("Thank you — your feedback has been saved successfully.", true);
-      try { celebrate(y); } catch (err) { console.error("Celebration failed:", err); }   // never affects the saved result
+      try { celebrate(y, pretty["School"]); } catch (err) { console.error("Celebration failed:", err); }   // never affects the saved result
     } catch (err) { say("We could not confirm your submission. Please refresh before trying again."); }
     finally { button.disabled = false; }
   });
@@ -491,6 +491,49 @@ function setupDictation() {
     return;
   }
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  /* ----- On-device recognition (recent Chrome): runs without Google's online speech service.
+     Used for English when the language pack is installed; otherwise the normal online recogniser is used. ----- */
+  const SPEECH_LANG = "en-US";
+  let localState = "unknown";                       // unknown | unsupported | unavailable | downloadable | downloading | available
+  let localInstalling = false;
+  function detectLocal() {
+    if (typeof Recognition.available !== "function") { localState = "unsupported"; return Promise.resolve(); }
+    return Promise.resolve().then(() => Recognition.available({ langs: [SPEECH_LANG], processLocally: true }))
+      .then(st => { localState = st || "unavailable"; })
+      .catch(() => { localState = "unsupported"; });
+  }
+  detectLocal();
+  function speechModes() {
+    const modes = [{ lang: SPEECH_LANG, local: false }, { lang: "en-GB", local: false }];
+    if (localState === "available" && "processLocally" in Recognition.prototype) {
+      modes.unshift({ lang: SPEECH_LANG, local: true });
+    } else if (localState === "downloadable" && !localInstalling && typeof Recognition.install === "function") {
+      localInstalling = true;
+      Promise.resolve().then(() => Recognition.install({ langs: [SPEECH_LANG], processLocally: true }))
+        .then(ok => { if (ok === true) return detectLocal(); })
+        .catch(err => console.warn("[dictation] language pack installation failed", err))
+        .finally(() => { localInstalling = false; });
+    }
+    return modes;
+  }
+  function configureSpeech(rec, mode) {
+    rec.lang = mode.lang;
+    if ("processLocally" in rec) rec.processLocally = mode.local;
+  }
+  const retryableSpeechErrors = new Set(["network", "no-speech", "language-not-supported", "service-not-allowed"]);
+  // Only try another engine before any text arrives. Never replay or discard recognised text.
+  function speechAttempt(rec, isCurrent, onTimeout) {
+    let timer = 0, heard = false;
+    const clear = () => { clearTimeout(timer); timer = 0; };
+    const arm = () => {
+      clear();
+      if (!heard) timer = setTimeout(() => {
+        if (isCurrent() && !heard) onTimeout();
+      }, 7000);
+    };
+    return { arm, clear, heard: () => heard, result: () => { heard = true; clear(); } };
+  }
   let activeButton = null, activeTextarea = null, activeFeedback = null, recognition = null, wantListening = false, session = 0;
   // Dictation switches itself off after a long silence (so the mic is never left open by accident)
   const SILENCE_AFTER_SPEECH_MS = 6000;   // quiet for this long after the last words: stop
@@ -512,42 +555,32 @@ function setupDictation() {
     }, ms);
   };
 
-  /* ----- Desktop: the glow around "Stop" follows how loud you speak (sets --voice from 0 to 1 on the button's wrapper) ----- */
+  /* ----- The glow around "Stop" pulses when speech arrives (sets --voice from 0 to 1 on the button's wrapper).
+     It must NOT open its own microphone stream: a second capture can starve speech recognition, so the mic would
+     "work" but no text would appear. The recognizer's own events drive the glow instead. ----- */
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let meter = null;
   function stopMeter() {
     if (!meter) return;
     const m = meter; meter = null;
     m.dead = true; cancelAnimationFrame(m.raf);
-    try { m.stream && m.stream.getTracks().forEach(t => t.stop()); } catch (err) {}
-    try { m.ctx && m.ctx.close(); } catch (err) {}
     if (m.wrap) { m.wrap.classList.remove("is-voice"); m.wrap.style.removeProperty("--voice"); }
   }
   function startMeter(wrap) {
     stopMeter();
-    if (isMobile || reduceMotion || !wrap || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-    const m = meter = { wrap, dead: false, raf: 0, stream: null, ctx: null };
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      if (m.dead) { stream.getTracks().forEach(t => t.stop()); return; }       // dictation ended before the mic opened
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) { stream.getTracks().forEach(t => t.stop()); return; }
-      m.stream = stream; m.ctx = new AC();
-      const analyser = m.ctx.createAnalyser(); analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.6;
-      m.ctx.createMediaStreamSource(stream).connect(analyser);
-      const data = new Uint8Array(analyser.fftSize); let level = 0;
-      wrap.classList.add("is-voice");
-      const tick = () => {
-        if (m.dead) return;
-        analyser.getByteTimeDomainData(data);
-        let sum = 0; for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
-        const target = Math.min(1, Math.sqrt(sum / data.length) * 7);          // quiet room ~0, normal speech ~0.5-1
-        level += (target - level) * (target > level ? 0.5 : 0.12);              // rises fast, falls slowly
-        wrap.style.setProperty("--voice", level.toFixed(3));
-        m.raf = requestAnimationFrame(tick);
-      };
-      tick();
-    }).catch(() => { m.dead = true; });                                         // no mic access: the glow simply stays off
+    if (reduceMotion || !wrap) return;
+    const m = meter = { wrap, dead: false, raf: 0, level: 0, t0: performance.now() };
+    wrap.classList.add("is-voice");
+    const tick = now => {
+      if (m.dead) return;
+      const idle = 0.12 + 0.06 * Math.sin((now - m.t0) / 900);                  // a calm breathing glow while listening
+      m.level *= 0.94;                                                            // pulses fade away smoothly
+      wrap.style.setProperty("--voice", Math.max(m.level, idle).toFixed(3));
+      m.raf = requestAnimationFrame(tick);
+    };
+    m.raf = requestAnimationFrame(tick);
   }
+  function pulseMeter() { if (meter) meter.level = Math.min(1, 0.55 + Math.random() * 0.45); }
 
   function resetButton() {
     clearSilence(); stopMeter();
@@ -592,16 +625,28 @@ function setupDictation() {
       armSilence(SILENCE_AT_START_MS);
       startMeter(button.closest(".dictate-wrap"));
 
+      const modes = speechModes();
+      let modeIndex = 0;
       const begin = () => {
         const rec = new Recognition();
         const recId = ++recCounter;
         recognition = rec;
-        rec.lang = "en-US";
+        const mode = modes[modeIndex];
+        configureSpeech(rec, mode);
+        const current = () => recognition === rec && wantListening && mySession === session;
+        let failure = "", timedOut = false;
+        const attempt = speechAttempt(rec, current, () => {
+          timedOut = true;
+          try { rec.abort(); } catch (err) { rec.onend(); }
+        });
         rec.continuous = !isMobile;
         rec.interimResults = !isMobile;
         rec.onresult = event => {
+          if (timedOut || mySession !== session || (recognition && recognition !== rec)) return;
+          attempt.result();
+          dbg("text received");
           if (mySession !== session && activeTextarea === textarea) return;   // a newer session owns this box
-          if (activeTextarea === textarea) armSilence(SILENCE_AFTER_SPEECH_MS);   // words are still coming in
+          if (activeTextarea === textarea) { armSilence(SILENCE_AFTER_SPEECH_MS); pulseMeter(); }   // words are still coming in
           const live = hf.on && activeTextarea === textarea;                       // hands-free: listen for spoken commands
           let command = null;
           if (isMobile) {
@@ -625,24 +670,41 @@ function setupDictation() {
           }
           if (command && live) setTimeout(() => hfCommand(command), 60);
         };
-        rec.onspeechstart = () => { if (activeTextarea === textarea) armSilence(SILENCE_AFTER_SPEECH_MS); };
+        // Diagnostics: shows which step of speech recognition is reached (remove once dictation works)
+        const dbg = t => { if (feedback && activeTextarea === textarea) feedback.textContent = "[mic] " + t; console.log("[dictation]", t); };
+        rec.onstart = () => dbg("recognition started (" + mode.lang + (mode.local ? ", on-device)" : ", online)"));
+        rec.onaudiostart = () => dbg("microphone audio is reaching the recogniser, now speak");
+        rec.onsoundstart = () => dbg("sound detected");
+        rec.onnomatch = () => dbg("heard sound but could not match words");
+        rec.onspeechstart = () => { if (activeTextarea === textarea) { armSilence(SILENCE_AFTER_SPEECH_MS); pulseMeter(); } };
         rec.onerror = event => {
-          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-            wantListening = false;
-            feedback.textContent = "Microphone access was blocked.";
-          } else if (event.error !== "aborted" && event.error !== "no-speech") {
-            feedback.textContent = "Voice input is unavailable.";
-          }
+          if (!current()) return;
+          failure = event.error;
+          attempt.clear();
+          console.log("[dictation] error", failure);
         };
         rec.onend = () => {
-          if (recognition !== rec) return;
-          if (wantListening && (isMobile || hf.on) && activeTextarea === textarea) {
-            committed = textarea.value.trim();                                    // keep what is already written
-            try { begin(); return; } catch (err) {}
+          attempt.clear();
+          if (!current()) return;
+          const canRetry = !attempt.heard() && (timedOut || !failure || retryableSpeechErrors.has(failure));
+          if (canRetry && modeIndex + 1 < modes.length) {
+            modeIndex++;
+            armSilence(SILENCE_AT_START_MS);
+            feedback.textContent = "No words recognised. Trying " + modes[modeIndex].lang + " — please speak again.";
+            try { begin(); return; } catch (err) { failure = "start-failed"; }
+          } else if (!failure && !timedOut && attempt.heard() && (isMobile || hf.on)) {
+            committed = textarea.value.trim();
+            armSilence(SILENCE_AFTER_SPEECH_MS);
+            try { begin(); return; } catch (err) { failure = "start-failed"; }
           }
           resetButton();
+          if (failure === "not-allowed") feedback.textContent = "Microphone access was blocked. Check browser permissions.";
+          else if (failure === "audio-capture") feedback.textContent = "No working microphone was found. Check your browser microphone.";
+          else if (failure || timedOut || !attempt.heard()) feedback.textContent = "Voice input stopped (" + (timedOut ? "no words recognised" : failure || "no words recognised") + "). Press Speak to retry or type your answer.";
         };
-        rec.start();
+        attempt.arm();
+        try { rec.start(); } catch (err) { failure = "start-failed"; rec.onend(); }
+
       };
       try { begin(); } catch (err) { resetButton(); }
     });
@@ -767,15 +829,22 @@ function setupDictation() {
   }
 
   // Scores and navigation (steps 3 and 5) have no text box, so they get their own small listener
-  function hfListenCommands(i, tok) {
+  function hfListenCommands(i, tok, modes = speechModes(), modeIndex = 0) {
     const y = hf.y;
     const rec = new Recognition();
     hf.cmdRec = rec;
-    rec.lang = "en-US";
+    configureSpeech(rec, modes[modeIndex]);
+    const current = () => hf.on && hf.cmdRec === rec && hf.token === tok;
+    let failure = "", timedOut = false;
+    const attempt = speechAttempt(rec, current, () => {
+      timedOut = true;
+      try { rec.abort(); } catch (err) { rec.onend(); }
+    });
     rec.continuous = !isMobile;
     rec.interimResults = false;
     rec.onresult = ev => {
-      if (!hf.on || hf.token !== tok) return;
+      if (!current() || timedOut) return;
+      attempt.result();
       armSilence(SILENCE_AFTER_SPEECH_MS);
       for (let k = ev.resultIndex; k < ev.results.length; k++) {
         if (!ev.results[k].isFinal) continue;
@@ -791,12 +860,24 @@ function setupDictation() {
         if (i === 5 && /submit|send/i.test(heard)) { hfSay(y, "Say exactly “submit feedback” to send.", true); }
       }
     };
-    rec.onerror = ev => {
-      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") hfEnd("Microphone access was blocked.");
+    rec.onerror = ev => { if (current()) { failure = ev.error; attempt.clear(); } };
+    rec.onend = () => {
+      attempt.clear();
+      if (!current()) return;
+      if (!attempt.heard() && (timedOut || !failure || retryableSpeechErrors.has(failure)) && modeIndex + 1 < modes.length) {
+        hfSay(y, "Trying another English recogniser. Please speak again. " + hfLabel(y, i), true);
+        armSilence(SILENCE_AT_START_MS);
+        hfListenCommands(i, tok, modes, modeIndex + 1);
+      } else if (attempt.heard() && !failure && !timedOut) {
+        hfListenCommands(i, tok, modes, modeIndex);
+      } else {
+        hfEnd("Voice input stopped (" + (timedOut ? "no words recognised" : failure || "no words recognised") + "). Press Start to retry.");
+      }
     };
-    rec.onend = () => { if (hf.on && hf.cmdRec === rec && hf.token === tok) { try { rec.start(); } catch (err) {} } };
-    try { rec.start(); } catch (err) { hfEnd("Voice input is unavailable."); }
+    attempt.arm();
+    try { rec.start(); } catch (err) { failure = "start-failed"; rec.onend(); }
   }
+
   function hfScore(y, key, n) {
     const id = /^overall/.test(key) ? "overall" : /^resource/.test(key) ? "resources" : /^engage/.test(key) ? "engagement" : "clarity";
     const el = document.getElementById(`${y}-${id}`);
@@ -960,8 +1041,19 @@ function fireConfetti(colors) {
   setTimeout(() => canvas.remove(), 5000);                   // safety net
 }
 
+// "Your school's next feedback Monday" line for the thank-you box (empty when the school or its schedule is not known)
+function nextFeedbackHTML(y, school) {
+  try {
+    const n = window.IPTNextFeedback && window.IPTNextFeedback(y, school);
+    if (!n) return "";
+    const day = n.date.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    const away = n.days <= 1 ? "tomorrow" : n.days === 7 ? "in 1 week" : "in " + n.days + " days";
+    return `<div class="thanks-next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span><b>Your school's next feedback Monday</b><span>${day} \u00B7 ${away}</span></span></div>`;
+  } catch (err) { return ""; }
+}
+
 // Glass thank-you box. The page behind is blurred slightly until the box is closed.
-function showThanks(y, returnTo) {
+function showThanks(y, returnTo, school) {
   if (document.querySelector(".thanks-overlay")) return;
   const c = YEARS[y];
   const overlay = document.createElement("div");
@@ -972,6 +1064,7 @@ function showThanks(y, returnTo) {
       <p class="t-kicker mb-2 uppercase" style="font-size:14px;">${c.kicker}</p>
       <h2 id="thanks-title" class="t-title" style="font-size:28px;line-height:1.2;">Thank you for your feedback</h2>
       <p id="thanks-text" class="t-intro mt-3" style="font-size:16px;">Your ${c.label} reflections have been saved. They help us improve together.</p>
+      ${nextFeedbackHTML(y, school)}
       ${window.IPTBoost && window.IPTBoost.supported() && (CFG.boost || {}).enabled !== false ? `<button type="button" class="thanks-boost mt-5 inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-2.5 font-semibold" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#eef5ff;">Need a boost? ✨</button><br>` : ""}
       <button type="button" class="thanks-close mt-4 inline-flex items-center justify-center gap-2 rounded-2xl px-8 py-3 font-bold shadow-lg" style="${c.submitBtn}"><span style="color:${c.submitTxt};">Back to main page</span></button>
     </div>`;
@@ -1002,9 +1095,9 @@ function showThanks(y, returnTo) {
   requestAnimationFrame(() => requestAnimationFrame(() => { overlay.classList.add("show"); closeBtn.focus({ preventScroll: true }); }));
 }
 
-function celebrate(y) {
+function celebrate(y, school) {
   const submit = document.querySelector(`#${y}-form button[type="submit"]`);
-  try { showThanks(y, submit); } catch (err) { console.error("Thank-you box failed:", err); }
+  try { showThanks(y, submit, school); } catch (err) { console.error("Thank-you box failed:", err); }
   try { fireConfetti(CONFETTI_COLORS[y]); } catch (err) { console.error("Confetti failed:", err); }
 }
 
